@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { GraduationCap, CheckCircle, AlertCircle, Info, UserCheck } from 'lucide-react';
+import { GraduationCap, CheckCircle, AlertCircle, Info, UserCheck, X } from 'lucide-react';
 
 interface ClassSelectorModalProps {
   isOpen: boolean;
@@ -7,8 +7,11 @@ interface ClassSelectorModalProps {
   currentClass: string;
   classList?: string[];
   onSelectClass: (selectedClass: string, realName?: string) => Promise<void>;
+  onClose?: () => void;
   isMandatory?: boolean;
 }
+
+const DEFAULT_FALLBACK_CLASSES = ['X-1', 'X-2', 'X-3', 'XI-1', 'XI-2', 'XI-3', 'XII-1', 'XII-2', 'XII-3'];
 
 export const ClassSelectorModal: React.FC<ClassSelectorModalProps> = ({
   isOpen,
@@ -16,10 +19,13 @@ export const ClassSelectorModal: React.FC<ClassSelectorModalProps> = ({
   currentClass,
   classList = [],
   onSelectClass,
+  onClose,
   isMandatory = false,
 }) => {
+  const activeClassList = classList && classList.length > 0 ? classList : DEFAULT_FALLBACK_CLASSES;
+
   const [fullName, setFullName] = useState<string>(currentName);
-  const [selectedClass, setSelectedClass] = useState<string>(currentClass || (classList[0] || ''));
+  const [selectedClass, setSelectedClass] = useState<string>(currentClass || (activeClassList[0] || ''));
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
 
@@ -29,8 +35,8 @@ export const ClassSelectorModal: React.FC<ClassSelectorModalProps> = ({
     }
     if (currentClass) {
       setSelectedClass(currentClass);
-    } else if (classList.length > 0 && !selectedClass) {
-      setSelectedClass(classList[0]);
+    } else if (activeClassList.length > 0 && !selectedClass) {
+      setSelectedClass(activeClassList[0]);
     }
   }, [currentName, currentClass, classList]);
 
@@ -60,9 +66,20 @@ export const ClassSelectorModal: React.FC<ClassSelectorModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-xs p-4 animate-fade-in">
-      <div className="w-full max-w-md bg-white rounded-[28px] shadow-2xl border border-[#E2E8F8] overflow-hidden">
+      <div className="w-full max-w-md bg-white rounded-[28px] shadow-2xl border border-[#E2E8F8] overflow-hidden relative">
         {/* Header */}
         <div className="bg-gradient-to-r from-[#005AC1] via-blue-700 to-indigo-700 p-6 text-white text-center relative">
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="absolute top-4 right-4 p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-full transition-all cursor-pointer"
+              title="Tutup Formulir"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
+
           <div className="w-14 h-14 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-3 backdrop-blur-md">
             <GraduationCap className="w-8 h-8 text-white" />
           </div>
@@ -112,49 +129,39 @@ export const ClassSelectorModal: React.FC<ClassSelectorModalProps> = ({
                 Pilih Kelas Anda
               </label>
               <span className="text-[10px] font-bold text-slate-500">
-                {classList.length} Kelas Tersedia
+                {activeClassList.length} Kelas Tersedia
               </span>
             </div>
 
-            {classList.length === 0 ? (
-              <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl text-amber-800 text-xs flex items-start gap-2.5">
-                <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-bold">Belum Ada Daftar Kelas</p>
-                  <p className="text-[11px] mt-0.5 text-amber-700">Daftar kelas belum diatur di Pengaturan Sekolah oleh Guru/Admin Perpustakaan.</p>
-                </div>
-              </div>
-            ) : (
-              <div className="max-h-52 overflow-y-auto pr-1 grid grid-cols-3 gap-2 scrollbar-thin">
-                {classList.map((cls) => {
-                  const isSelected = selectedClass === cls;
-                  return (
-                    <button
-                      key={cls}
-                      type="button"
-                      onClick={() => {
-                        setSelectedClass(cls);
-                        setError('');
-                      }}
-                      className={`py-2.5 px-3 rounded-2xl text-xs font-bold text-center transition-all flex items-center justify-center gap-1 cursor-pointer ${
-                        isSelected
-                          ? 'bg-[#005AC1] text-white shadow-md'
-                          : 'bg-slate-100 text-slate-700 hover:bg-blue-50 hover:text-[#005AC1]'
-                      }`}
-                    >
-                      <span>{cls}</span>
-                      {isSelected && <CheckCircle className="w-3.5 h-3.5 text-white shrink-0" />}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+            <div className="max-h-52 overflow-y-auto pr-1 grid grid-cols-3 gap-2 scrollbar-thin">
+              {activeClassList.map((cls) => {
+                const isSelected = selectedClass === cls;
+                return (
+                  <button
+                    key={cls}
+                    type="button"
+                    onClick={() => {
+                      setSelectedClass(cls);
+                      setError('');
+                    }}
+                    className={`py-2.5 px-3 rounded-2xl text-xs font-bold text-center transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                      isSelected
+                        ? 'bg-[#005AC1] text-white shadow-md'
+                        : 'bg-slate-100 text-slate-700 hover:bg-blue-50 hover:text-[#005AC1]'
+                    }`}
+                  >
+                    <span>{cls}</span>
+                    {isSelected && <CheckCircle className="w-3.5 h-3.5 text-white shrink-0" />}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <div className="pt-2">
             <button
               type="submit"
-              disabled={loading || !fullName.trim() || !selectedClass || classList.length === 0}
+              disabled={loading || !fullName.trim() || !selectedClass}
               className="w-full py-3.5 px-4 bg-[#005AC1] hover:bg-[#00479A] text-white font-black text-xs sm:text-sm rounded-full transition-all shadow-md disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
             >
               {loading ? (

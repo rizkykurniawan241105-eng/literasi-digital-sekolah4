@@ -757,20 +757,23 @@ export default function App() {
       isProfileComplete: true 
     };
     setCurrentUser(updatedUser);
+    setIsClassModalOpen(false);
 
     try {
       if (authUser?.uid && !authUser.uid.startsWith('demo-')) {
-        await setDoc(doc(db, 'users', authUser.uid), {
-          name: finalName,
-          kelas: selectedClass,
-          isProfileComplete: true,
-          updatedAt: new Date().toISOString(),
-        }, { merge: true });
+        const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 3000));
+        await Promise.race([
+          setDoc(doc(db, 'users', authUser.uid), {
+            name: finalName,
+            kelas: selectedClass,
+            isProfileComplete: true,
+            updatedAt: new Date().toISOString(),
+          }, { merge: true }),
+          timeoutPromise,
+        ]);
       }
     } catch (err) {
       console.error('Error saving profile selection to Firestore:', err);
-    } finally {
-      setIsClassModalOpen(false);
     }
   };
 
@@ -1003,49 +1006,60 @@ export default function App() {
 
   // Admin Actions: Settings Save & Whitelist Sync
   const handleSaveSettings = async (newSettings: AppSettings) => {
-    try {
-      // 1. Save to app_settings/config
-      await setDoc(doc(db, 'app_settings', 'config'), newSettings, { merge: true });
+    // 1. Optimistic local update for instant UI feedback
+    setAppSettings(newSettings);
 
-      // 2. Save specifically to school_settings/classes
+    try {
+      const saveTasks: Promise<any>[] = [];
+
+      // 2. Save to app_settings/config
+      saveTasks.push(setDoc(doc(db, 'app_settings', 'config'), newSettings, { merge: true }));
+
+      // 3. Save specifically to school_settings/classes
       if (newSettings.classes !== undefined) {
-        await setDoc(doc(db, 'school_settings', 'classes'), {
-          list: newSettings.classes,
-          updatedAt: new Date().toISOString(),
-        }, { merge: true });
+        saveTasks.push(
+          setDoc(doc(db, 'school_settings', 'classes'), {
+            list: newSettings.classes,
+            updatedAt: new Date().toISOString(),
+          }, { merge: true })
+        );
       }
 
-      // 3. Save specifically to pengaturan_aplikasi/jadwal_literasi as requested
-      await setDoc(doc(db, 'pengaturan_aplikasi', 'jadwal_literasi'), {
-        scheduleMode: newSettings.scheduleMode || 'schedule',
-        isAccessOpenManual: newSettings.isAccessOpenManual ?? true,
-        activeDays: newSettings.activeDays || ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat'],
-        activeStartTime: newSettings.activeStartTime || '07:00',
-        activeEndTime: newSettings.activeEndTime || '08:00',
-        updatedAt: new Date().toISOString(),
-      }, { merge: true });
+      // 4. Save specifically to pengaturan_aplikasi/jadwal_literasi
+      saveTasks.push(
+        setDoc(doc(db, 'pengaturan_aplikasi', 'jadwal_literasi'), {
+          scheduleMode: newSettings.scheduleMode || 'schedule',
+          isAccessOpenManual: newSettings.isAccessOpenManual ?? true,
+          activeDays: newSettings.activeDays || ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat'],
+          activeStartTime: newSettings.activeStartTime || '07:00',
+          activeEndTime: newSettings.activeEndTime || '08:00',
+          updatedAt: new Date().toISOString(),
+        }, { merge: true })
+      );
 
-      // 4. Sync adminEmails to 'admin_whitelists' collection in Firestore
+      // 5. Sync adminEmails to 'admin_whitelists' collection in Firestore
       if (newSettings.adminEmails && newSettings.adminEmails.length > 0) {
         for (const emailStr of newSettings.adminEmails) {
           const cleanEmail = emailStr.toLowerCase().trim();
           if (cleanEmail) {
             const key = cleanEmail.replace(/[^a-zA-Z0-9]/g, '_');
-            await setDoc(doc(db, 'admin_whitelists', key), {
-              email: cleanEmail,
-              role: 'admin',
-              addedAt: new Date().toISOString(),
-              addedBy: currentUser?.name || 'Admin',
-            }, { merge: true });
+            saveTasks.push(
+              setDoc(doc(db, 'admin_whitelists', key), {
+                email: cleanEmail,
+                role: 'admin',
+                addedAt: new Date().toISOString(),
+                addedBy: currentUser?.name || 'Admin',
+              }, { merge: true })
+            );
           }
         }
       }
 
-      setAppSettings(newSettings);
+      // Execute all writes in parallel with a 3.5s timeout guarantee so UI never hangs
+      const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 3500));
+      await Promise.race([Promise.all(saveTasks), timeoutPromise]);
     } catch (err) {
-      console.error('Error saving settings:', err);
-      setAppSettings(newSettings);
-      throw err;
+      console.warn('Silent warning saving settings to Firestore:', err);
     }
   };
 
@@ -2140,6 +2154,7 @@ export default function App() {
         currentClass={currentUser?.kelas || ''}
         classList={appSettings.classes}
         onSelectClass={handleSelectClass}
+        onClose={() => setIsClassModalOpen(false)}
         isMandatory={!currentUser?.isProfileComplete || !currentUser?.kelas}
       />
 
