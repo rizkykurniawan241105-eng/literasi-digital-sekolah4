@@ -11,8 +11,6 @@ interface ClassSelectorModalProps {
   isMandatory?: boolean;
 }
 
-const DEFAULT_FALLBACK_CLASSES = ['X-1', 'X-2', 'X-3', 'XI-1', 'XI-2', 'XI-3', 'XII-1', 'XII-2', 'XII-3'];
-
 export const ClassSelectorModal: React.FC<ClassSelectorModalProps> = ({
   isOpen,
   currentName = '',
@@ -22,10 +20,8 @@ export const ClassSelectorModal: React.FC<ClassSelectorModalProps> = ({
   onClose,
   isMandatory = false,
 }) => {
-  const activeClassList = classList && classList.length > 0 ? classList : DEFAULT_FALLBACK_CLASSES;
-
   const [fullName, setFullName] = useState<string>(currentName);
-  const [selectedClass, setSelectedClass] = useState<string>(currentClass || (activeClassList[0] || ''));
+  const [selectedClass, setSelectedClass] = useState<string>(currentClass || (classList[0] || ''));
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
 
@@ -35,8 +31,8 @@ export const ClassSelectorModal: React.FC<ClassSelectorModalProps> = ({
     }
     if (currentClass) {
       setSelectedClass(currentClass);
-    } else if (activeClassList.length > 0 && !selectedClass) {
-      setSelectedClass(activeClassList[0]);
+    } else if (classList && classList.length > 0 && !selectedClass) {
+      setSelectedClass(classList[0]);
     }
   }, [currentName, currentClass, classList]);
 
@@ -49,20 +45,22 @@ export const ClassSelectorModal: React.FC<ClassSelectorModalProps> = ({
       setError('Silakan isi Nama Lengkap Anda sesuai dengan daftar hadir/absen sekolah.');
       return;
     }
-    if (!selectedClass) {
+    if (classList.length > 0 && !selectedClass) {
       setError('Silakan pilih kelas Anda terlebih dahulu.');
       return;
     }
     setLoading(true);
     setError('');
     try {
-      await onSelectClass(selectedClass, cleanName);
+      await onSelectClass(selectedClass || 'Umum', cleanName);
     } catch (err: any) {
       setError(err?.message || 'Gagal menyimpan data profil. Coba lagi.');
     } finally {
       setLoading(false);
     }
   };
+
+  const hasClasses = classList && classList.length > 0;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-xs p-4 animate-fade-in">
@@ -129,39 +127,51 @@ export const ClassSelectorModal: React.FC<ClassSelectorModalProps> = ({
                 Pilih Kelas Anda
               </label>
               <span className="text-[10px] font-bold text-slate-500">
-                {activeClassList.length} Kelas Tersedia
+                {hasClasses ? `${classList.length} Kelas Tersedia` : 'Belum Tersedia'}
               </span>
             </div>
 
-            <div className="max-h-52 overflow-y-auto pr-1 grid grid-cols-3 gap-2 scrollbar-thin">
-              {activeClassList.map((cls) => {
-                const isSelected = selectedClass === cls;
-                return (
-                  <button
-                    key={cls}
-                    type="button"
-                    onClick={() => {
-                      setSelectedClass(cls);
-                      setError('');
-                    }}
-                    className={`py-2.5 px-3 rounded-2xl text-xs font-bold text-center transition-all flex items-center justify-center gap-1 cursor-pointer ${
-                      isSelected
-                        ? 'bg-[#005AC1] text-white shadow-md'
-                        : 'bg-slate-100 text-slate-700 hover:bg-blue-50 hover:text-[#005AC1]'
-                    }`}
-                  >
-                    <span>{cls}</span>
-                    {isSelected && <CheckCircle className="w-3.5 h-3.5 text-white shrink-0" />}
-                  </button>
-                );
-              })}
-            </div>
+            {!hasClasses ? (
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl text-amber-800 text-xs flex items-start gap-2.5">
+                <Info className="w-4.5 h-4.5 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold">Daftar Kelas Belum Ditambahkan</p>
+                  <p className="text-[11px] mt-0.5 text-amber-700">
+                    Admin / Guru belum menambahkan daftar kelas di menu Pengaturan. Setelah admin menambahkan kelas di Pengaturan, daftar kelas akan otomatis muncul di sini untuk dipilih.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="max-h-52 overflow-y-auto pr-1 grid grid-cols-3 gap-2 scrollbar-thin">
+                {classList.map((cls) => {
+                  const isSelected = selectedClass === cls;
+                  return (
+                    <button
+                      key={cls}
+                      type="button"
+                      onClick={() => {
+                        setSelectedClass(cls);
+                        setError('');
+                      }}
+                      className={`py-2.5 px-3 rounded-2xl text-xs font-bold text-center transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                        isSelected
+                          ? 'bg-[#005AC1] text-white shadow-md'
+                          : 'bg-slate-100 text-slate-700 hover:bg-blue-50 hover:text-[#005AC1]'
+                      }`}
+                    >
+                      <span>{cls}</span>
+                      {isSelected && <CheckCircle className="w-3.5 h-3.5 text-white shrink-0" />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           <div className="pt-2">
             <button
               type="submit"
-              disabled={loading || !fullName.trim() || !selectedClass}
+              disabled={loading || !fullName.trim() || (hasClasses && !selectedClass)}
               className="w-full py-3.5 px-4 bg-[#005AC1] hover:bg-[#00479A] text-white font-black text-xs sm:text-sm rounded-full transition-all shadow-md disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
             >
               {loading ? (
@@ -176,4 +186,5 @@ export const ClassSelectorModal: React.FC<ClassSelectorModalProps> = ({
     </div>
   );
 };
+
 
