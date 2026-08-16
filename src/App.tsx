@@ -676,7 +676,8 @@ export default function App() {
       if (errCode === 'auth/popup-closed-by-user') {
         setLoginErrorMsg('Proses login Google dibatalkan karena jendela pop-up ditutup.');
       } else if (errCode === 'auth/unauthorized-domain') {
-        setLoginErrorMsg('Domain ini belum terdaftar di Firebase Auth. Silakan gunakan tombol Pratinjau Akses.');
+        const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'domain ini';
+        setLoginErrorMsg(`Domain (${currentHost}) belum terdaftar di Authorized Domains pada Firebase Console Anda (literasi-digital-sekolah-54af5). Silakan tambahkan domain ini di Firebase Console -> Authentication -> Settings -> Authorized domains.`);
       } else if (errStr.includes('api-key-not-valid') || errStr.includes('invalid-api-key') || errStr.includes('API key')) {
         setLoginErrorMsg('Konfigurasi API Key Firebase belum valid. Mengalihkan Anda ke Mode Pratinjau...');
         setTimeout(() => {

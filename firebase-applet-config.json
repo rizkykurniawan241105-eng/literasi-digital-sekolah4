@@ -1,12 +1,8 @@
 {
-  "projectId": "intense-strata-lf6jr",
-  "appId": "1:973671416228:web:fcbe9c06220605de0bc131",
-  "apiKey": "AIzaSyDb1clbbUue1XBoPL3hgFidUNGpxyRcKKQ",
-  "authDomain": "intense-strata-lf6jr.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-literasidigitals-9748a219-1d21-45ba-9663-02c22074c115",
-  "storageBucket": "intense-strata-lf6jr.firebasestorage.app",
-  "messagingSenderId": "973671416228",
-  "measurementId": "",
-  "oAuthClientId": "973671416228-bqb9gi033on1ecrdqu9bmnedq1pq8e9f.apps.googleusercontent.com",
-  "recaptchaSiteKey": ""
+  "projectId": "literasi-digital-sekolah-54af5",
+  "appId": "1:983828396097:web:e3618887ffe56b417aeec0",
+  "apiKey": "AIzaSyDsq_Z34Wu_LmDBg3aycXOungNxYz7nQTU",
+  "authDomain": "literasi-digital-sekolah-54af5.firebaseapp.com",
+  "storageBucket": "literasi-digital-sekolah-54af5.firebasestorage.app",
+  "messagingSenderId": "983828396097"
 }
