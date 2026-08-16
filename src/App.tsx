@@ -240,6 +240,11 @@ export default function App() {
   useEffect(() => {
     let unsubUserDoc: (() => void) | null = null;
 
+    // Safety timeout: max 2.5s for auth loading screen so UI never hangs
+    const safetyTimer = setTimeout(() => {
+      setAuthLoading(false);
+    }, 2500);
+
     const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
       if (unsubUserDoc) {
         unsubUserDoc();
@@ -258,7 +263,7 @@ export default function App() {
 
         // Listen to User Profile doc in real-time purely from Firestore
         const userDocRef = doc(db, 'users', firebaseUser.uid);
-        unsubUserDoc = onSnapshot(userDocRef, async (userSnap) => {
+        unsubUserDoc = onSnapshot(userDocRef, (userSnap) => {
           if (userSnap.exists()) {
             const data = userSnap.data() as UserProfile;
             // STRICT RULE: If email is NOT whitelisted, force role to 'siswa' regardless of what document says
@@ -277,8 +282,9 @@ export default function App() {
             } else {
               setIsClassModalOpen(false);
             }
+            setAuthLoading(false);
           } else {
-            // First time login -> create doc for NEW USER
+            // First time login -> create doc for NEW USER (Non-blocking background save)
             const newProfile: UserProfile = {
               uid: firebaseUser.uid,
               name: firebaseUser.displayName || '',
@@ -289,18 +295,19 @@ export default function App() {
               isProfileComplete: false,
               createdAt: new Date().toISOString(),
             };
-            try {
-              await setDoc(userDocRef, newProfile);
-            } catch (err) {
-              console.warn('Set new user profile warning:', err);
-            }
+            
+            // Set state immediately for instant UI responsiveness
             setCurrentUser(newProfile);
-
             if (defaultRole !== 'admin') {
               setIsClassModalOpen(true);
             }
+            setAuthLoading(false);
+
+            // Background save to Firestore
+            setDoc(userDocRef, newProfile).catch((err) => {
+              console.warn('Background user profile save notice:', err);
+            });
           }
-          setAuthLoading(false);
         }, (err) => {
           console.warn('User profile listener offline fallback:', err);
           setCurrentUser((prev) => prev || {
@@ -333,6 +340,7 @@ export default function App() {
     });
 
     return () => {
+      clearTimeout(safetyTimer);
       unsubscribeAuth();
       if (unsubUserDoc) {
         unsubUserDoc();
@@ -343,6 +351,11 @@ export default function App() {
   // 2. Real-time Firestore Subscriptions for Books, Reports, and Settings
   useEffect(() => {
     setDataLoading(true);
+
+    // Safety timeout: max 2s for data loading so books and reports render instantly
+    const safetyDataTimer = setTimeout(() => {
+      setDataLoading(false);
+    }, 2000);
 
     // Users Listener
     const unsubUsers = onSnapshot(collection(db, 'users'), (snap) => {
@@ -356,21 +369,23 @@ export default function App() {
     });
 
     // Books Real-Time Firestore Listener ('books' collection)
-    const unsubBooks = onSnapshot(collection(db, 'books'), async (snap) => {
+    const unsubBooks = onSnapshot(collection(db, 'books'), (snap) => {
       if (snap.empty) {
-        // Automatic Firestore Seeding: Populate default high school collection so all devices share the same data
-        try {
-          for (const seedBook of INITIAL_SEED_BOOKS) {
-            await addDoc(collection(db, 'books'), {
-              ...seedBook,
-              createdAt: new Date().toISOString(),
-            });
-          }
-        } catch (seedErr) {
-          console.warn('Firestore initial books seed warning:', seedErr);
-        }
+        // Non-blocking seeding
         setBooks(INITIAL_SEED_BOOKS);
         setDataLoading(false);
+        (async () => {
+          try {
+            for (const seedBook of INITIAL_SEED_BOOKS) {
+              await addDoc(collection(db, 'books'), {
+                ...seedBook,
+                createdAt: new Date().toISOString(),
+              });
+            }
+          } catch (seedErr) {
+            console.warn('Firestore initial books seed warning:', seedErr);
+          }
+        })();
         return;
       }
 
@@ -581,23 +596,25 @@ export default function App() {
     });
 
     // Real-time Admin Whitelists Listener ('admin_whitelists' collection)
-    const unsubWhitelist = onSnapshot(collection(db, 'admin_whitelists'), async (snap) => {
+    const unsubWhitelist = onSnapshot(collection(db, 'admin_whitelists'), (snap) => {
       if (snap.empty) {
-        // Automatic Firestore Seeding: Populate default verified admin whitelist
-        try {
-          const defaultAdmins: AdminWhitelistEntry[] = [
-            { email: 'rizkykurniawan241105@gmail.com', name: 'Super Admin / Pengembang', role: 'admin', addedAt: new Date().toISOString() },
-            { email: 'admin@sekolah.sch.id', name: 'Admin Perpustakaan SMAN 1 Salem', role: 'admin', addedAt: new Date().toISOString() },
-            { email: 'guru@sekolah.sch.id', name: 'Koordinator Guru Literasi', role: 'admin', addedAt: new Date().toISOString() },
-            { email: 'guru@gmail.com', name: 'Guru Pengawas Literasi', role: 'admin', addedAt: new Date().toISOString() },
-          ];
-          for (const item of defaultAdmins) {
-            const key = item.email.toLowerCase().trim().replace(/[^a-zA-Z0-9]/g, '_');
-            await setDoc(doc(db, 'admin_whitelists', key), item, { merge: true });
+        // Automatic Firestore Seeding: Populate default verified admin whitelist (Non-blocking)
+        (async () => {
+          try {
+            const defaultAdmins: AdminWhitelistEntry[] = [
+              { email: 'rizkykurniawan241105@gmail.com', name: 'Super Admin / Pengembang', role: 'admin', addedAt: new Date().toISOString() },
+              { email: 'admin@sekolah.sch.id', name: 'Admin Perpustakaan SMAN 1 Salem', role: 'admin', addedAt: new Date().toISOString() },
+              { email: 'guru@sekolah.sch.id', name: 'Koordinator Guru Literasi', role: 'admin', addedAt: new Date().toISOString() },
+              { email: 'guru@gmail.com', name: 'Guru Pengawas Literasi', role: 'admin', addedAt: new Date().toISOString() },
+            ];
+            for (const item of defaultAdmins) {
+              const key = item.email.toLowerCase().trim().replace(/[^a-zA-Z0-9]/g, '_');
+              await setDoc(doc(db, 'admin_whitelists', key), item, { merge: true });
+            }
+          } catch (seedErr) {
+            console.log('Firestore initial admin_whitelists seed warning:', seedErr);
           }
-        } catch (seedErr) {
-          console.log('Firestore initial admin_whitelists seed warning:', seedErr);
-        }
+        })();
         return;
       }
 
@@ -860,16 +877,21 @@ export default function App() {
       let createdReportWithId: ReadingReport;
 
       if (!currentUser.uid.startsWith('demo-')) {
-        // Write to primary 'reports' collection
-        const docRef = await addDoc(collection(db, 'reports'), newReport);
-        createdReportWithId = { ...newReport, id: docRef.id };
+        const tempId = 'rep-' + Date.now();
+        createdReportWithId = { ...newReport, id: tempId };
         
-        // Also sync to 'reading_reports' collection with same ID
-        try {
-          await setDoc(doc(db, 'reading_reports', docRef.id), newReport);
-        } catch (syncErr) {
-          console.warn('Silent sync to reading_reports:', syncErr);
-        }
+        // Optimistic report addition
+        setReports((prev) => [createdReportWithId, ...prev]);
+
+        // Background write to Firestore
+        (async () => {
+          try {
+            const docRef = await addDoc(collection(db, 'reports'), newReport);
+            setDoc(doc(db, 'reading_reports', docRef.id), newReport).catch(() => {});
+          } catch (syncErr) {
+            console.warn('Firestore report write warning:', syncErr);
+          }
+        })();
       } else {
         // Mock add for demo user
         createdReportWithId = {
@@ -974,33 +996,59 @@ export default function App() {
 
   // Admin Actions: Books CRUD
   const handleAddBook = async (bookData: Omit<Book, 'id'>) => {
+    const tempId = 'book-' + Date.now();
+    const newBook: Book = { id: tempId, ...bookData };
+
+    // 1. Optimistic local update for instant UI feedback
+    setBooks((prev) => [newBook, ...prev]);
+
     try {
-      await addDoc(collection(db, 'books'), {
+      const payload = {
         ...bookData,
         createdAt: new Date().toISOString(),
-      });
+      };
+      
+      const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 3000));
+      await Promise.race([
+        addDoc(collection(db, 'books'), payload),
+        timeoutPromise,
+      ]);
     } catch (err) {
-      console.error('Error adding book:', err);
-      const localBook: Book = { id: 'book-' + Date.now(), ...bookData };
-      setBooks((prev) => [localBook, ...prev]);
+      console.warn('Background add book to Firestore notice:', err);
     }
   };
 
   const handleUpdateBook = async (id: string, bookData: Partial<Book>) => {
+    // 1. Optimistic local update
+    setBooks((prev) => prev.map((b) => (b.id === id ? { ...b, ...bookData } : b)));
+
     try {
-      await updateDoc(doc(db, 'books', id), bookData);
+      if (!id.startsWith('book-')) {
+        const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 3000));
+        await Promise.race([
+          updateDoc(doc(db, 'books', id), bookData),
+          timeoutPromise,
+        ]);
+      }
     } catch (err) {
-      console.error('Error updating book:', err);
-      setBooks((prev) => prev.map((b) => (b.id === id ? { ...b, ...bookData } : b)));
+      console.warn('Background update book notice:', err);
     }
   };
 
   const handleDeleteBook = async (id: string) => {
+    // 1. Optimistic local update
+    setBooks((prev) => prev.filter((b) => b.id !== id));
+
     try {
-      await deleteDoc(doc(db, 'books', id));
+      if (!id.startsWith('book-')) {
+        const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 3000));
+        await Promise.race([
+          deleteDoc(doc(db, 'books', id)),
+          timeoutPromise,
+        ]);
+      }
     } catch (err) {
-      console.error('Error deleting book:', err);
-      setBooks((prev) => prev.filter((b) => b.id !== id));
+      console.warn('Background delete book notice:', err);
     }
   };
 
