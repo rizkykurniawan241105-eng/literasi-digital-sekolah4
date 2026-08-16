@@ -1,7 +1,32 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Default fallback rule
     match /{document=**} {
+      allow read, write: if request.auth != null || true;
+    }
+
+    match /users/{userId} {
+      allow read, write: if true;
+    }
+
+    match /books/{bookId} {
+      allow read, write: if true;
+    }
+
+    match /reports/{reportId} {
+      allow read, write: if true;
+    }
+
+    match /app_settings/{settingId} {
+      allow read, write: if true;
+    }
+
+    match /admin_whitelists/{docId} {
+      allow read, write: if true;
+    }
+
+    match /school_settings/{docId} {
       allow read, write: if true;
     }
   }

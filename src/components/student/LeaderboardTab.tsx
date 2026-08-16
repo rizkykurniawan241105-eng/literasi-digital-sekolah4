@@ -391,7 +391,7 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-[#E2E8F8]">
-              {filteredRankings.map((student) => {
+              {filteredRankings.map((student, idx) => {
                 const isMe = student.userId === currentKey;
                 let badgeLabel = 'Pembaca Aktif';
                 let badgeStyle = 'bg-slate-100 text-slate-700 border-slate-200';
@@ -412,7 +412,7 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({
 
                 return (
                   <tr
-                    key={student.userId}
+                    key={student.userId ? `student-rank-${student.userId}-${idx}` : `student-idx-${idx}`}
                     className={`transition-colors ${
                       isMe ? 'bg-[#EEF3FF] font-semibold border-l-4 border-l-[#005AC1]' : 'hover:bg-[#F3F4F9]/60'
                     }`}

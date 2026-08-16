@@ -71,7 +71,7 @@ export const MyReportsTab: React.FC<MyReportsTabProps> = ({ reports, loading }) 
         </div>
       ) : (
         <div className="space-y-4">
-          {filteredReports.map((rep) => {
+          {filteredReports.map((rep, idx) => {
             const reportDate = rep.timestamp 
               ? new Date(rep.timestamp).toLocaleDateString('id-ID', {
                   weekday: 'long',
@@ -85,7 +85,7 @@ export const MyReportsTab: React.FC<MyReportsTabProps> = ({ reports, loading }) 
 
             return (
               <div
-                key={rep.id}
+                key={rep.id ? `my-rep-${rep.id}-${idx}` : `my-rep-idx-${idx}`}
                 className="bg-white rounded-[24px] border border-[#E2E8F8] p-5 shadow-xs hover:border-[#005AC1]/40 transition-all space-y-3"
               >
                 {/* Card Top Header */}

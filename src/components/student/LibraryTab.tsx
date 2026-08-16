@@ -118,11 +118,11 @@ export const LibraryTab: React.FC<LibraryTabProps> = ({
 
         {/* Category Pills Slider */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-1 scrollbar-none text-xs">
-          {CATEGORIES.map((cat) => {
+          {CATEGORIES.map((cat, index) => {
             const isActive = selectedCategory === cat;
             return (
               <button
-                key={cat}
+                key={`cat-${cat}-${index}`}
                 onClick={() => setSelectedCategory(cat)}
                 className={`px-4 py-1.5 rounded-full font-bold whitespace-nowrap transition-all border shrink-0 cursor-pointer ${
                   isActive
@@ -208,9 +208,9 @@ export const LibraryTab: React.FC<LibraryTabProps> = ({
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filteredBooks.map((book) => (
+            {filteredBooks.map((book, index) => (
               <div
-                key={book.id}
+                key={book.id ? `lib-book-${book.id}-${index}` : `lib-book-idx-${index}`}
                 className="bg-white rounded-[20px] border border-[#E2E8F8] shadow-xs hover:shadow-md hover:border-[#005AC1]/40 transition-all duration-200 flex flex-col overflow-hidden group"
               >
                 {/* Book Cover Image */}
