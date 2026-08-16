@@ -1,0 +1,85 @@
+{
+  "entities": {
+    "users": {
+      "title": "User Profiles",
+      "description": "Information about registered students and admins",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "kelas": { "type": "string" },
+        "role": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "name", "role"]
+    },
+    "books": {
+      "title": "Books",
+      "description": "Library catalog books",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "author": { "type": "string" },
+        "category": { "type": "string" },
+        "coverUrl": { "type": "string" },
+        "pdfUrl": { "type": "string" },
+        "description": { "type": "string" },
+        "pageCount": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "author", "category", "pdfUrl"]
+    },
+    "reports": {
+      "title": "Literacy Reports",
+      "description": "Student book reading reports",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "kelas": { "type": "string" },
+        "bookId": { "type": "string" },
+        "bookTitle": { "type": "string" },
+        "pagesRead": { "type": "string" },
+        "summary": { "type": "string" },
+        "status": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "dateStr": { "type": "string" }
+      },
+      "required": ["userId", "userName", "kelas", "bookTitle", "pagesRead", "summary"]
+    },
+    "app_settings": {
+      "title": "Application Settings",
+      "description": "Admin email lists and active classes configuration",
+      "type": "object",
+      "properties": {
+        "emails": { "type": "array", "items": { "type": "string" } },
+        "classList": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "admin_whitelists": {
+      "title": "Admin Whitelists",
+      "description": "Verified whitelist of email addresses permitted to access Admin roles and management functions",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string" },
+        "addedAt": { "type": "string", "format": "date-time" },
+        "addedBy": { "type": "string" }
+      },
+      "required": ["email"]
+    },
+    "school_settings": {
+      "title": "School Settings",
+      "description": "Firestore document collection for dynamic school classes and academic configurations",
+      "type": "object",
+      "properties": {
+        "list": { "type": "array", "items": { "type": "string" } },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}
