@@ -78,8 +78,35 @@ import { evaluateBadges, Badge } from './data/badges';
 export default function App() {
   // Auth State
   const [authUser, setAuthUser] = useState<User | null>(null);
-  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
-  const [authLoading, setAuthLoading] = useState<boolean>(true);
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
+    try {
+      const cached = localStorage.getItem('litera_cached_user');
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [authLoading, setAuthLoading] = useState<boolean>(() => {
+    try {
+      const cached = localStorage.getItem('litera_cached_user');
+      return cached ? false : true;
+    } catch {
+      return true;
+    }
+  });
+
+  // LocalStorage sync helper
+  const updateCurrentUserState = (val: UserProfile | null | ((prev: UserProfile | null) => UserProfile | null)) => {
+    setCurrentUser((prev) => {
+      const next = typeof val === 'function' ? val(prev) : val;
+      if (next) {
+        try { localStorage.setItem('litera_cached_user', JSON.stringify(next)); } catch {}
+      } else {
+        try { localStorage.removeItem('litera_cached_user'); } catch {}
+      }
+      return next;
+    });
+  };
 
   // App Settings & Admin Whitelists State
   const [appSettings, setAppSettings] = useState<AppSettings>({
@@ -93,6 +120,13 @@ export default function App() {
   });
   const [adminWhitelistDocs, setAdminWhitelistDocs] = useState<AdminWhitelistEntry[]>([]);
   const [accessDeniedToast, setAccessDeniedToast] = useState<string | null>(null);
+
+  // Stable Refs to prevent Auth Listener re-subscription loops
+  const adminWhitelistDocsRef = React.useRef(adminWhitelistDocs);
+  adminWhitelistDocsRef.current = adminWhitelistDocs;
+
+  const appSettingsRef = React.useRef(appSettings);
+  appSettingsRef.current = appSettings;
 
   // Admin Security States
   const [isAdminPinModalOpen, setIsAdminPinModalOpen] = useState<boolean>(false);
@@ -198,8 +232,8 @@ export default function App() {
       'guru@sekolah.sch.id',
       'rizkykurniawan241105@gmail.com'
     ];
-    const docsEmails = (adminWhitelistDocs || []).map((d) => (d.email || '').toLowerCase().trim());
-    const configuredWhitelisted = (appSettings.adminEmails || []).map((e) => e.toLowerCase().trim());
+    const docsEmails = (adminWhitelistDocsRef.current || []).map((d) => (d.email || '').toLowerCase().trim());
+    const configuredWhitelisted = (appSettingsRef.current.adminEmails || []).map((e) => e.toLowerCase().trim());
     return (
       defaultWhitelisted.includes(clean) ||
       docsEmails.includes(clean) ||
@@ -223,7 +257,7 @@ export default function App() {
           badgeEarnedDates,
           streakCount,
         };
-        setCurrentUser(updatedUser);
+        updateCurrentUserState(updatedUser);
         if (!currentUser.uid.startsWith('demo-')) {
           updateDoc(doc(db, 'users', currentUser.uid), {
             badges: updatedBadges,
@@ -236,14 +270,14 @@ export default function App() {
     }
   }, [reports.length, currentUser?.uid]);
 
-  // 1. Listen to Firebase Auth with Strict RBAC Enforcement
+  // 1. Listen to Firebase Auth with Strict RBAC Enforcement (Single Lifetime Listener)
   useEffect(() => {
     let unsubUserDoc: (() => void) | null = null;
 
-    // Safety timeout: max 2.5s for auth loading screen so UI never hangs
+    // Safety timeout: max 2s for initial auth check
     const safetyTimer = setTimeout(() => {
       setAuthLoading(false);
-    }, 2500);
+    }, 2000);
 
     const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
       if (unsubUserDoc) {
@@ -251,40 +285,52 @@ export default function App() {
         unsubUserDoc = null;
       }
 
-      setAuthLoading(true);
       if (firebaseUser) {
         setAuthUser(firebaseUser);
         const emailClean = (firebaseUser.email || '').toLowerCase().trim();
         const isWhitelisted = checkIsWhitelistedAdmin(emailClean);
         const isPinVerified = sessionStorage.getItem('admin_pin_verified') === 'true';
-        // STRICT RBAC: Only emails in whitelist can ever have admin role
         const isAdmin = isWhitelisted || isPinVerified;
         const defaultRole: UserRole = isAdmin ? 'admin' : 'siswa';
 
-        // Listen to User Profile doc in real-time purely from Firestore
+        // Instantly set immediate user profile so student dashboard opens 0ms without delay
+        updateCurrentUserState((prev) => {
+          if (prev && prev.uid === firebaseUser.uid) {
+            return prev;
+          }
+          return {
+            uid: firebaseUser.uid,
+            name: firebaseUser.displayName || emailClean.split('@')[0] || 'Siswa',
+            email: firebaseUser.email || '',
+            photoURL: firebaseUser.photoURL || undefined,
+            kelas: '',
+            role: defaultRole,
+            isProfileComplete: false,
+          };
+        });
+        setAuthLoading(false);
+
+        // Background real-time listener to sync profile/class from Firestore
         const userDocRef = doc(db, 'users', firebaseUser.uid);
         unsubUserDoc = onSnapshot(userDocRef, (userSnap) => {
           if (userSnap.exists()) {
             const data = userSnap.data() as UserProfile;
-            // STRICT RULE: If email is NOT whitelisted, force role to 'siswa' regardless of what document says
             const finalRole: UserRole = isWhitelisted ? 'admin' : 'siswa';
             const isProfileComplete = data.isProfileComplete === true || (!!data.name && !!data.kelas);
 
-            setCurrentUser({
+            updateCurrentUserState({
               ...data,
               role: finalRole,
               isProfileComplete,
             });
 
-            // If student role and profile is NOT complete (missing class or name): open mandatory profile modal
             if (finalRole !== 'admin' && (!data.kelas || !isProfileComplete)) {
               setIsClassModalOpen(true);
             } else {
               setIsClassModalOpen(false);
             }
-            setAuthLoading(false);
           } else {
-            // First time login -> create doc for NEW USER (Non-blocking background save)
+            // New User profile creation in background
             const newProfile: UserProfile = {
               uid: firebaseUser.uid,
               name: firebaseUser.displayName || '',
@@ -296,45 +342,24 @@ export default function App() {
               createdAt: new Date().toISOString(),
             };
             
-            // Set state immediately for instant UI responsiveness
-            setCurrentUser(newProfile);
+            updateCurrentUserState(newProfile);
             if (defaultRole !== 'admin') {
               setIsClassModalOpen(true);
             }
-            setAuthLoading(false);
 
-            // Background save to Firestore
             setDoc(userDocRef, newProfile).catch((err) => {
               console.warn('Background user profile save notice:', err);
             });
           }
+          setAuthLoading(false);
         }, (err) => {
-          console.warn('User profile listener offline fallback:', err);
-          setCurrentUser((prev) => prev || {
-            uid: firebaseUser.uid,
-            name: firebaseUser.displayName || '',
-            email: firebaseUser.email || '',
-            photoURL: firebaseUser.photoURL || undefined,
-            kelas: '',
-            role: defaultRole,
-            isProfileComplete: false,
-          });
+          console.warn('User profile listener fallback:', err);
           setAuthLoading(false);
         });
       } else {
-        // Preserve demo user state if active
-        setCurrentUser((prev) => {
-          if (prev?.uid && prev.uid.startsWith('demo-')) {
-            return prev;
-          }
-          return null;
-        });
-        setAuthUser((prev) => {
-          if (prev?.uid && prev.uid.startsWith('demo-')) {
-            return prev;
-          }
-          return null;
-        });
+        // Preserve demo user state if active, otherwise logout cleanly
+        setAuthUser((prev) => (prev?.uid?.startsWith('demo-') ? prev : null));
+        updateCurrentUserState((prev) => (prev?.uid?.startsWith('demo-') ? prev : null));
         setAuthLoading(false);
       }
     });
@@ -346,7 +371,7 @@ export default function App() {
         unsubUserDoc();
       }
     };
-  }, [appSettings.adminEmails, adminWhitelistDocs]);
+  }, []); // Strict [] array: NEVER RE-RUN OR RE-SUBSCRIBE ON STATE CHANGES!
 
   // 2. Real-time Firestore Subscriptions for Books, Reports, and Settings
   useEffect(() => {
@@ -758,7 +783,7 @@ export default function App() {
     }
     sessionStorage.removeItem('admin_pin_verified');
     setAuthUser(null);
-    setCurrentUser(null);
+    updateCurrentUserState(null);
     setIsClassModalOpen(false);
     setIsMobileSidebarOpen(false);
   };
